@@ -1,7 +1,7 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
-  title: "RP Flask REST API"
-  description: "An API about people and notes"
+  title: "COMP2001 CW2 API"
+  description: "RESTful API for managing user profiles in the Trail Application."
   version: "1.0.0"
 
 servers:
@@ -9,84 +9,102 @@ servers:
 
 components:
   schemas:
-    Person:
-      type: "object"
+    Profile:
+      type: object
       required:
-        - lname
+        - Email
+        - Username
+        - Password
       properties:
-        fname:
-          type: "string"
-        lname:
-          type: "string"
+        Email:
+          type: string
+          description: "User's email address"
+        Username:
+          type: string
+          description: "Display name for the user"
+        Password:
+          type: string
+          description: "Password for the user"
   parameters:
-    lname:
-      name: "lname"
-      description: "Last name of the person to get"
+    email:
+      name: email
       in: path
-      required: True
+      required: true
       schema:
-        type: "string"
+        type: string
+      description: "Email address of the user profile"
 
 paths:
-  /people:
+  /profile:
     get:
-      operationId: "people.read_all"
+      operationId: "profile.read_all"
       tags:
-        - "People"
-      summary: "Read the list of people"
+        - Profile
+      summary: Retrieve all user profiles
+      description: "Returns a list of all profiles in the database"
       responses:
         "200":
-          description: "Successfully read people list"
+          description: Successfully returned list of profiles
     post:
-      operationId: "people.create"
+      operationId: "profile.create"
       tags:
-        - People
-      summary: "Create a person"
+        - Profile
+      summary: Create a new user profile
+      description: "Creates a new profile"
       requestBody:
-        description: "Person to create"
-        required: True
+        x-body-name: body
+        required: true
         content:
           application/json:
             schema:
-              x-body-name: "person"
-              $ref: "#/components/schemas/Person"
+              $ref: "#/components/schemas/Profile"
       responses:
         "201":
-          description: "Successfully created person"
-  /people/{lname}:
+          description: Profile created successfully
+        "409":
+          description: Profile with this email already exists
+  /profile/{email}:
     get:
-      operationId: "people.read_one"
+      operationId: "profile.read_one"
       tags:
-        - People
-      summary: "Read one person"
+        - Profile
+      summary: Get a single profile by email
       parameters:
-        - $ref: "#/components/parameters/lname"
+        - $ref: "#/components/parameters/email"
       responses:
         "200":
-          description: "Successfully read person"
+          description: Profile found and returned
+        "404":
+          description: Profile not found
     put:
+      operationId: "profile.update"
       tags:
-        - People
-      operationId: "people.update"
-      summary: "Update a person"
+        - Profile
+      summary: Update an existing profile
+      description: "Updates profile fields"
       parameters:
-        - $ref: "#/components/parameters/lname"
-      responses:
-        "200":
-          description: "Successfully updated person"
+        - $ref: "#/components/parameters/email"
       requestBody:
+        x-body-name: body
+        required: true
         content:
           application/json:
             schema:
-              x-body-name: "person"
-              $ref: "#/components/schemas/Person"
-    delete:
-      tags:
-        - People
-      operationId: "people.delete"
-      summary: "Delete a person"
-      parameters:
-        - $ref: "#/components/parameters/lname"
+              $ref: "#/components/schemas/Profile"
       responses:
         "200":
-          description: "Successfully deleted person"
+          description: Profile updated successfully
+        "404":
+          description: Profile not found
+    delete:
+      operationId: "profile.delete"
+      tags:
+        - Profile
+      summary: Delete a profile by email
+      parameters:
+        - $ref: "#/components/parameters/email"
+      responses:
+        "204":
+          description: Profile deleted successfully
+        "404":
+          description: Profile not found
