@@ -1,0 +1,13 @@
+DROP VIEW CW2.vw_UserProfile;
+
+DROP TABLE CW2.UserLog;
+DROP TABLE CW2.FavouriteActivity;
+DROP TABLE CW2.Activity;
+DROP TABLE CW2.Users;
+
+DROP TRIGGER CW2.tr_LogNewUser;
+
+DROP PROCEDURE CW2.usp_InsertUser;
+DROP PROCEDURE CW2.usp_GetUser;
+DROP PROCEDURE CW2.usp_UpdateUser;
+DROP PROCEDURE CW2.usp_DeleteUser;

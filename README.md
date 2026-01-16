@@ -1,5 +1,5 @@
 # COMP2001: Microservice Implementation
-This is my code for the Python microservice, currently uses pyodbc for SQL, I'll switch to sqlalchemy next as the lab docs suggest. Also add the dockerfile and upload to docker hub once I've finished. Still heavily WIP
+This is my code for the Python microservice. now with SQLAlchemy!
 
 ![werks on my machine :D](https://avatars.githubusercontent.com/u/150309928)
 

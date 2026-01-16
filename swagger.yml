@@ -16,14 +16,57 @@ components:
   schemas:
     Profile:
       type: object
+      properties:
+        email:
+          type: string
+          description: "User's email address"
+        username:
+          type: string
+          description: "Display name for the user"
+        about_me:
+          type: string
+          description: "Optional bio/description"
+        location:
+          type: string
+          description: "User's location"
+        dob:
+          type: string
+          format: date
+          description: "Date of birth (ISO format: YYYY-MM-DD)"
+        language:
+          type: string
+          description: "Preferred language"
+        password:
+          type: string
+          description: "Plaintext password (hashed before storage)"
+        role:
+          type: string
+          enum: ["Admin", "User"]
+          default: "User"
+          description: "User role for access control"
+      required:
+        - email
+        - username
+        - password
+        - role
+
+    UserInput:
+      type: object
+      properties:
+        Email:
+          type: string
+        Username:
+          type: string
+        Password:
+          type: string
       required:
         - Email
         - Username
         - Password
+
+    ProfileUpdate:
+      type: object
       properties:
-        Email:
-          type: string
-          description: "User's email address"
         Username:
           type: string
           description: "Display name for the user"
@@ -48,6 +91,18 @@ components:
           enum: ["Admin", "User"]
           default: "User"
           description: "User role for access control"
+
+    Activity:
+      type: object
+      properties:
+        activity_id:
+          type: integer
+        activity:
+          type: string
+      required:
+        - activity_id
+        - activity
+
     Login:
       type: object
       required:
@@ -60,6 +115,39 @@ components:
         Password:
           type: string
           description: "Plaintext password to verify"
+
+    ProfileUpdate:
+      type: object
+      properties:
+        Username:
+          type: string
+        AboutMe:
+          type: string
+        Location:
+          type: string
+        Dob:
+          type: string
+          format: date
+        Language:
+          type: string
+        Role:
+          type: string
+          enum: ["Admin", "User"]
+        Password:
+          type: string
+
+    Activity:
+      type: object
+      properties:
+        activity_id:
+          type: integer
+        activity:
+          type: string
+      required:
+        - activity_id
+        - activity
+
+
   parameters:
     email:
       name: email
@@ -68,6 +156,13 @@ components:
       schema:
         type: string
       description: "Email address of the user profile"
+    activity_id:
+      name: activity_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: "ID of the activity"
 
 # API endpoints with HTTP methods
 # API endpoint definitions
@@ -119,7 +214,7 @@ paths:
           description: Profile not found
 
     put:
-      operationId: profile.update  # Maps to update(email, body) in profile.py
+      operationId: profile.update_profile  # Maps to update(email, body) in profile.py
       tags:
         - Profile
       summary: Update an existing profile
@@ -132,7 +227,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Profile"
+              $ref: "#/components/schemas/ProfileUpdate"
       responses:
         "200":
           description: Profile updated successfully
@@ -159,7 +254,7 @@ paths:
       tags:
         - Profile
       summary: Authenticate user with email and password
-      description: "Verifies credentials against hashed password in database."
+      description: "Verifies credentials against plain password in database."
       requestBody:
         x-body-name: body
         required: true
@@ -172,3 +267,223 @@ paths:
           description: Login successful
         "401":
           description: Invalid email or password
+
+  # Stored Procedure Endpoints
+  /procedures/insert:
+    post:
+      operationId: profile.insert_via_procedure
+      tags:
+        - Procedures
+      summary: Insert user via stored procedure
+      description: "Inserts a new user using usp_InsertUser procedure."
+      requestBody:
+        x-body-name: body
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Profile"
+      responses:
+        "201":
+          description: User inserted successfully
+        "500":
+          description: Database error
+
+  /procedures/get/{email}:
+    get:
+      operationId: profile.get_via_procedure
+      tags:
+        - Procedures
+      summary: Get user via stored procedure
+      description: "Retrieves a user using usp_GetUser procedure."
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "404":
+          description: User not found
+        "500":
+          description: Database error
+
+  /procedures/update:
+    put:
+      operationId: profile.update_via_procedure
+      tags:
+        - Procedures
+      summary: Update user via stored procedure
+      description: "Updates user using usp_UpdateUser procedure."
+      requestBody:
+        x-body-name: body
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: User updated successfully
+        "500":
+          description: Database error
+
+  /procedures/delete/{email}:
+    delete:
+      operationId: profile.delete_via_procedure
+      tags:
+        - Procedures
+      summary: Delete user via stored procedure
+      description: "Deletes a user using usp_DeleteUser procedure."
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: User deleted successfully
+        "500":
+          description: Database error
+
+  # View Endpoint
+  /view/profile:
+    get:
+      operationId: profile.get_profile_view
+      tags:
+        - Views
+      summary: Get user profile view
+      description: "Retrieves data from vw_UserProfile view."
+      responses:
+        "200":
+          description: Profile view data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    Email:
+                      type: string
+                    Username:
+                      type: string
+                    About_me:
+                      type: string
+                    Location:
+                      type: string
+                    Dob:
+                      type: string
+                    Language:
+                      type: string
+                    Role:
+                      type: string
+                    FavouriteActivities:
+                      type: string
+
+  # Activities endpoints
+  /activities:
+    get:
+      operationId: profile.read_all_activities
+      tags:
+        - Activities
+      summary: Retrieve all activities
+      description: "Returns a list of all available activities"
+      responses:
+        "200":
+          description: Successfully returned list of activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+    post:
+      operationId: profile.create_activity
+      tags:
+        - Activities
+      summary: Create a new activity
+      description: "Creates a new activity type"
+      requestBody:
+        x-body-name: body
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Activity"
+      responses:
+        "201":
+          description: Activity created successfully
+        "409":
+          description: Activity already exists
+
+  # Favourites endpoints
+  /profile/{email}/favourites:
+    get:
+      operationId: profile.read_user_favourites
+      tags:
+        - Favourites
+      summary: Get user's favourite activities
+      description: "Returns list of activities favourited by the user"
+      parameters:
+        - $ref: "#/components/parameters/email"
+      responses:
+        "200":
+          description: Successfully returned favourite activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+        "404":
+          description: User not found
+    post:
+      operationId: profile.add_favourite
+      tags:
+        - Favourites
+      summary: Add a favourite activity for the user
+      description: "Adds an activity to the user's favourites"
+      parameters:
+        - $ref: "#/components/parameters/email"
+      requestBody:
+        x-body-name: body
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - Activity_id
+              properties:
+                Activity_id:
+                  type: integer
+                  description: "ID of the activity to add"
+      responses:
+        "201":
+          description: Favourite added successfully
+        "404":
+          description: User or activity not found
+        "409":
+          description: Already a favourite
+    delete:
+      operationId: profile.remove_favourite
+      tags:
+        - Favourites
+      summary: Remove a favourite activity for the user
+      description: "Removes an activity from the user's favourites"
+      parameters:
+        - $ref: "#/components/parameters/email"
+        - $ref: "#/components/parameters/activity_id"
+      responses:
+        "204":
+          description: Favourite removed successfully
+        "404":
+          description: Favourite not found
