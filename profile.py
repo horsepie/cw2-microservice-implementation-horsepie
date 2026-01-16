@@ -1,62 +1,159 @@
-import os
-import pyodbc
 import re
 from flask import abort, make_response
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_SERVER = os.getenv("DB_SERVER")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-
-def get_db_connection():
-    try:
-        conn = pyodbc.connect(
-            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER={DB_SERVER};"
-            f"DATABASE={DB_NAME};"
-            f"UID={DB_USER};"
-            f"PWD={DB_PASSWORD};"
-            "Encrypt=yes;"
-            "TrustServerCertificate=yes;"
-        )
-        return conn
-    except Exception as e:
-        abort(500, f"Database connection failed: {str(e)}")
+from config import db
+from models import User, user_schema, users_schema
 
 # READ ALL
 def read_all():
-    # Retrieves all users from the database
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT Email, Username, About_me, Location, Dob, Language, Role FROM CW2.Users")
-        columns = [column[0] for column in cursor.description]
-        rows = cursor.fetchall()
-        result = [dict(zip(columns, row)) for row in rows]
-        return result
-    finally:
-        cursor.close()
-        conn.close()
+        users = User.query.all()
+        return users_schema.dump(users)
+    except Exception as e:
+        abort(500, f"Database error: {str(e)}")
+
+def read_one(email):
+    try:
+        user = User.query.get(email)
+        if user:
+            return user_schema.dump(user)
+        else:
+            abort(404, f"Profile with email {email} not found")
+    except Exception as e:
+        abort(500, f"Database error: {str(e)}")
+
+def create(body):
+    email = body.get("Email").strip() if body.get("Email") else None
+    username = body.get("Username").strip() if body.get("Username") else None
+    password = body.get("Password")
+    about_me = body.get("AboutMe").strip() if body.get("AboutMe") else None
+    location = body.get("Location").strip() if body.get("Location") else None
+    dob = body.get("Dob")
+    language = body.get("Language").strip() if body.get("Language") else None
+    role = body.get("Role", "User").strip()
+
+    if not email or not username or not password:
+        abort(400, "Email, Username, and Password are required")
+
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        abort(400, "Invalid email format")
+
+    if role not in ["Admin", "User"]:
+        abort(400, "Role must be 'Admin' or 'User'")
+
+    try:
+        if User.query.get(email):
+            abort(409, f"Profile with email {email} already exists")
+
+        user = User(
+            email=email,
+            username=username,
+            about_me=about_me,
+            location=location,
+            dob=dob,
+            language=language,
+            password=password,
+            role=role
+        )
+        db.session.add(user)
+        db.session.commit()
+        return user_schema.dump(user), 201
+    except Exception as e:
+        db.session.rollback()
+        abort(500, f"Database error: {str(e)}")
+
+def update(email, body):
+    try:
+        user = User.query.get(email)
+        if not user:
+            abort(404, f"Profile with email {email} not found")
+
+        updated = False
+        if "Username" in body:
+            username = body["Username"].strip()
+            if not username:
+                abort(400, "Username cannot be empty")
+            user.username = username
+            updated = True
+        if "AboutMe" in body:
+            user.about_me = body["AboutMe"].strip() if body["AboutMe"] else None
+            updated = True
+        if "Location" in body:
+            user.location = body["Location"].strip() if body["Location"] else None
+            updated = True
+        if "Dob" in body:
+            user.dob = body["Dob"]
+            updated = True
+        if "Language" in body:
+            user.language = body["Language"].strip() if body["Language"] else None
+            updated = True
+        if "Role" in body:
+            role = body["Role"].strip()
+            if role not in ["Admin", "User"]:
+                abort(400, "Role must be 'Admin' or 'User'")
+            user.role = role
+            updated = True
+        if "Password" in body:
+            user.password = body["Password"]
+            updated = True
+
+        if not updated:
+            abort(400, "No fields to update")
+
+        db.session.commit()
+        return user_schema.dump(user)
+    except Exception as e:
+        db.session.rollback()
+        abort(500, f"Database error: {str(e)}")
+
+def delete(email):
+    try:
+        user = User.query.get(email)
+        if not user:
+            abort(404, f"Profile with email {email} not found")
+        db.session.delete(user)
+        db.session.commit()
+        return make_response("", 204)
+    except Exception as e:
+        db.session.rollback()
+        abort(500, f"Database error: {str(e)}")
+
+def login(body):
+    email = body.get("Email").strip() if body.get("Email") else None
+    password = body.get("Password")
+    if not email or not password:
+        abort(400, "Email and Password are required")
+
+    try:
+        user = User.query.get(email)
+        if user and user.password == password:
+            return {"message": "Login successful"}
+        else:
+            abort(401, "Invalid email or password")
+    except Exception as e:
+        abort(500, f"Database error: {str(e)}")
+
+def read_one(email):
+    # Selects user by email
+    try:
+        user = User.query.get(email)
+        if user:
+            return {'email': user.email, 'username': user.username, 'about_me': user.about_me, 'location': user.location, 'dob': str(user.dob) if user.dob else None, 'language': user.language, 'role': user.role}
+        else:
+            abort(404, f"Profile with email {email} not found")
+    except Exception as e:
+        abort(500, f"Database error: {str(e)}")
 
 # READ ONE
 def read_one(email):
     # Selects user by email
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT Email, Username, About_me, Location, Dob, Language, Role FROM CW2.Users WHERE Email = ?", email)
-        row = cursor.fetchone()
-        if row:
-            columns = [column[0] for column in cursor.description]
-            return dict(zip(columns, row))
+        user = User.query.get(email)
+        if user:
+            return {'email': user.email, 'username': user.username, 'about_me': user.about_me, 'location': user.location, 'dob': str(user.dob) if user.dob else None, 'language': user.language, 'role': user.role}
         else:
             abort(404, f"Profile with email {email} not found")
-    finally:
-        cursor.close()
-        conn.close()
+    except Exception as e:
+        abort(500, f"Database error: {str(e)}")
 
 # CREATE
 def create(body):
@@ -81,99 +178,86 @@ def create(body):
     if role not in ["Admin", "User"]:
         abort(400, "Role must be 'Admin' or 'User'")
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT 1 FROM CW2.Users WHERE Email = ?", email)
-        if cursor.fetchone():
+        if User.query.get(email):
             abort(409, f"Profile with email {email} already exists")
 
-        cursor.execute("""
-            INSERT INTO CW2.Users (Email, Username, Password, About_me, Location, Dob, Language, Role)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (email, username, password, about_me, location, dob, language, role))
-        conn.commit()
-        return read_one(email), 201
-    except pyodbc.Error as e:
-        conn.rollback()
+        user = User(
+            email=email,
+            username=username,
+            about_me=about_me,
+            location=location,
+            dob=dob,
+            language=language,
+            password=password,
+            role=role
+        )
+        db.session.add(user)
+        db.session.commit()
+        return {'email': user.email, 'username': user.username, 'about_me': user.about_me, 'location': user.location, 'dob': str(user.dob) if user.dob else None, 'language': user.language, 'role': user.role}, 201
+    except Exception as e:
+        db.session.rollback()
         abort(500, f"Database error: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
 
 # UPDATE
 def update(email, body):
     # Update user account details
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT 1 FROM CW2.Users WHERE Email = ?", email)
-        if not cursor.fetchone():
+        user = User.query.get(email)
+        if not user:
             abort(404, f"Profile with email {email} not found")
 
-        updates = []
-        params = []
+        updated = False
         if "Username" in body:
             username = body["Username"].strip()
             if not username:
                 abort(400, "Username cannot be empty")
-            updates.append("Username = ?")
-            params.append(username)
+            user.username = username
+            updated = True
         if "AboutMe" in body:
-            updates.append("About_me = ?")
-            params.append(body["AboutMe"].strip() if body["AboutMe"] else None)
+            user.about_me = body["AboutMe"].strip() if body["AboutMe"] else None
+            updated = True
         if "Location" in body:
-            updates.append("Location = ?")
-            params.append(body["Location"].strip() if body["Location"] else None)
+            user.location = body["Location"].strip() if body["Location"] else None
+            updated = True
         if "Dob" in body:
-            updates.append("Dob = ?")
-            params.append(body["Dob"])
+            user.dob = body["Dob"]
+            updated = True
         if "Language" in body:
-            updates.append("Language = ?")
-            params.append(body["Language"].strip() if body["Language"] else None)
+            user.language = body["Language"].strip() if body["Language"] else None
+            updated = True
         if "Role" in body:
             role = body["Role"].strip()
             if role not in ["Admin", "User"]:
                 abort(400, "Role must be 'Admin' or 'User'")
-            updates.append("Role = ?")
-            params.append(role)
+            user.role = role
+            updated = True
         if "Password" in body:
-            password = body["Password"]
-            updates.append("Password = ?")
-            params.append(password)
+            user.password = body["Password"]
+            updated = True
 
-        if not updates:
+        if not updated:
             abort(400, "No fields to update")
 
-        params.append(email)
-        sql = f"UPDATE CW2.Users SET {', '.join(updates)} WHERE Email = ?"
-        cursor.execute(sql, params)
-        conn.commit()
-        return read_one(email)
-    except pyodbc.Error as e:
-        conn.rollback()
+        db.session.commit()
+        return {'email': user.email, 'username': user.username, 'about_me': user.about_me, 'location': user.location, 'dob': str(user.dob) if user.dob else None, 'language': user.language, 'role': user.role}
+    except Exception as e:
+        db.session.rollback()
         abort(500, f"Database error: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
 
 # DELETE
 def delete(email):
     # Deletes user, selected by email
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM CW2.Users WHERE Email = ?", email)
-        if cursor.rowcount == 0:
+        user = User.query.get(email)
+        if not user:
             abort(404, f"Profile with email {email} not found")
-        conn.commit()
+        db.session.delete(user)
+        db.session.commit()
         return make_response("", 204)
-    except pyodbc.Error as e:
-        conn.rollback()
+    except Exception as e:
+        db.session.rollback()
         abort(500, f"Database error: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
 
 # LOGIN
 def login(body):
@@ -183,17 +267,11 @@ def login(body):
     if not email or not password:
         abort(400, "Email and Password are required")
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute("SELECT Password FROM CW2.Users WHERE Email = ?", email)
-        row = cursor.fetchone()
-        if row and row[0] == password:
+        user = User.query.get(email)
+        if user and user.password == password:
             return {"message": "Login successful"}
         else:
             abort(401, "Invalid email or password")
-    except pyodbc.Error as e:
+    except Exception as e:
         abort(500, f"Database error: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
