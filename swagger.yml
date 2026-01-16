@@ -1,12 +1,17 @@
+# swagger.yml - OpenAPI 3.0 Specification for Trail App Microservice
+
+# Defines the API version and metadata
 openapi: 3.0.3
 info:
   title: "COMP2001 CW2 API"
-  description: "RESTful API for managing user profiles in the Trail Application."
+  description: "RESTful API for managing user profiles, activities, and favourites in the Trail Application. Supports CRUD operations with MSSQL backend."
   version: "1.0.0"
 
+# Base URL for API endpoints (relative to server)
 servers:
   - url: "/api"
 
+# Reusable components: schemas for request/response bodies, parameters
 components:
   schemas:
     Profile:
@@ -22,9 +27,39 @@ components:
         Username:
           type: string
           description: "Display name for the user"
+        AboutMe:
+          type: string
+          description: "Optional bio/description"
+        Location:
+          type: string
+          description: "User's location"
+        Dob:
+          type: string
+          format: date
+          description: "Date of birth (ISO format: YYYY-MM-DD)"
+        Language:
+          type: string
+          description: "Preferred language"
         Password:
           type: string
-          description: "Password for the user"
+          description: "Plaintext password (hashed before storage)"
+        Role:
+          type: string
+          enum: ["Admin", "User"]
+          default: "User"
+          description: "User role for access control"
+    Login:
+      type: object
+      required:
+        - Email
+        - Password
+      properties:
+        Email:
+          type: string
+          description: "User's email for login"
+        Password:
+          type: string
+          description: "Plaintext password to verify"
   parameters:
     email:
       name: email
@@ -34,25 +69,29 @@ components:
         type: string
       description: "Email address of the user profile"
 
+# API endpoints with HTTP methods
+# API endpoint definitions
 paths:
+  # Collection endpoint for profiles
   /profile:
     get:
-      operationId: "profile.read_all"
+      operationId: profile.read_all  # Maps to read_all() in profile.py
       tags:
         - Profile
       summary: Retrieve all user profiles
-      description: "Returns a list of all profiles in the database"
+      description: "Returns a list of all profiles in the database (excludes passwords for security)"
       responses:
         "200":
           description: Successfully returned list of profiles
+
     post:
-      operationId: "profile.create"
+      operationId: profile.create  # Maps to create(body) in profile.py
       tags:
         - Profile
       summary: Create a new user profile
-      description: "Creates a new profile"
+      description: "Creates a new profile with hashed password. Requires Email, Username, Password."
       requestBody:
-        x-body-name: body
+        x-body-name: body  # Parameter name for the function
         required: true
         content:
           application/json:
@@ -63,9 +102,11 @@ paths:
           description: Profile created successfully
         "409":
           description: Profile with this email already exists
+
+  # Individual profile endpoints (by email)
   /profile/{email}:
     get:
-      operationId: "profile.read_one"
+      operationId: profile.read_one  # Maps to read_one(email) in profile.py
       tags:
         - Profile
       summary: Get a single profile by email
@@ -76,12 +117,13 @@ paths:
           description: Profile found and returned
         "404":
           description: Profile not found
+
     put:
-      operationId: "profile.update"
+      operationId: profile.update  # Maps to update(email, body) in profile.py
       tags:
         - Profile
       summary: Update an existing profile
-      description: "Updates profile fields"
+      description: "Updates profile fields (only provided fields are changed). Password is re-hashed if updated."
       parameters:
         - $ref: "#/components/parameters/email"
       requestBody:
@@ -96,8 +138,9 @@ paths:
           description: Profile updated successfully
         "404":
           description: Profile not found
+
     delete:
-      operationId: "profile.delete"
+      operationId: profile.delete  # Maps to delete(email) in profile.py
       tags:
         - Profile
       summary: Delete a profile by email
@@ -108,3 +151,24 @@ paths:
           description: Profile deleted successfully
         "404":
           description: Profile not found
+
+  # Authentication endpoint
+  /login:
+    post:
+      operationId: profile.login  # Maps to login(body) in profile.py
+      tags:
+        - Profile
+      summary: Authenticate user with email and password
+      description: "Verifies credentials against hashed password in database."
+      requestBody:
+        x-body-name: body
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Login"
+      responses:
+        "200":
+          description: Login successful
+        "401":
+          description: Invalid email or password
